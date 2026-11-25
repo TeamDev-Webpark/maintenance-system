@@ -11,14 +11,14 @@ import NotificationCenter from "./pages/NotificationCenter.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import AdminDashboard from "./pages/AdminDashboard.tsx";
 import SpareParts from "./pages/SpareParts.tsx";
-import Checksheet from "./pages/Checksheet.tsx";
 // ── Admin ──
 import AdminSpareRequests from "./pages/AdminSpareRequests.tsx";
 import TechnicianDetail from "./pages/TechnicianDetail.tsx";
 import TechnicianHistory from "./pages/TechnicianHistory.tsx";
-// ── QC ──
-import QCDashboard from "./pages/QCDashboard.tsx";
-import QCRecordDetail from "./pages/QCRecordDetail.tsx";
+import PMDashboard from "./pages/PMDashboard";
+import { PMAlerts, PMChecksheets, PMPlanner } from "./features/maintenance/PMChecksheets";
+import { AirJet } from "./features/maintenance/AirJet";
+import { MachineRegister, StaffDirectory } from "./features/maintenance/Registers";
 // ── Executive ──
 import ExecutiveDashboard from "./pages/ExecutiveDashboard.tsx";
 import ExecutivePurchaseApproval from "./pages/ExecutivePurchaseApproval.tsx";
@@ -53,10 +53,15 @@ const App = () => (
             <Route path="/admin/spare-parts" element={<SpareParts />} />
             <Route path="/checksheet" element={<AdminDashboard />} />
             <Route path="/admin/checksheet" element={<AdminDashboard />} />
-            {/* QC */}
-            <Route path="/qc/dashboard" element={<QCDashboard />} />
-            <Route path="/qc/schedule" element={<QCDashboard />} />
-            <Route path="/qc/record/:id" element={<QCRecordDetail />} />
+            <Route path="/pm" element={<PMDashboard />}>
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<PMPlanner />} />
+              <Route path="checksheets" element={<PMChecksheets />} />
+              <Route path="alerts" element={<PMAlerts />} />
+              <Route path="air-jet" element={<AirJet />} />
+              <Route path="machines" element={<MachineRegister />} />
+              <Route path="staff" element={<StaffDirectory />} />
+            </Route>
             {/* Executive */}
             <Route path="/executive/dashboard" element={<ExecutiveDashboard />} />
             <Route path="/executive/purchase-approval" element={<ExecutivePurchaseApproval />} />
@@ -69,7 +74,7 @@ const App = () => (
             <Route path="/superadmin/approvals" element={<Navigate to="/superadmin/dashboard?tab=approvals" replace />} />
             <Route path="/superadmin/settings" element={<Navigate to="/superadmin/dashboard?tab=settings" replace />} />
             <Route path="/superadmin/audit-log" element={<Navigate to="/superadmin/dashboard?tab=audit-log" replace />} />
-            <Route path="/superadmin/qc" element={<Navigate to="/superadmin/dashboard?tab=qc" replace />} />
+            <Route path="/superadmin/pm" element={<Navigate to="/superadmin/dashboard?tab=pm" replace />} />
             {/* Work Order Management (Unified Assign + Status) */}
             <Route path="/work-orders" element={<WorkOrderManagementUnified />} />
             <Route path="/superadmin/work-orders" element={<WorkOrderManagementUnified />} />

@@ -20,13 +20,11 @@ import {
   PRIORITY_LABEL,
   TECHNICIAN_MAP,
   MOCK_SPARE_PARTS_EXTENDED,
+  isBelowMinimum,
   MOCK_PURCHASE_ORDERS,
   MOCK_SPARE_PART_REQUESTS,
-  MOCK_QC_SCHEDULES,
   MOCK_USER_APPROVAL_REQUESTS,
   MOCK_SYSTEM_USERS,
-  MOCK_CHECKSHEET_TEMPLATES,
-  MOCK_CHECKSHEET_RECORDS,
   WorkRequest,
   timeAgo,
 } from "@/lib/mockData";
@@ -37,7 +35,8 @@ import { SparePartsSection } from "@/components/superadmin/SparePartsSection";
 import { ApprovalsSection } from "@/components/superadmin/ApprovalsSection";
 import { SettingsSection } from "@/components/superadmin/SettingsSection";
 import { AuditLogSection } from "@/components/superadmin/AuditLogSection";
-import { QCSection } from "@/components/superadmin/QCSection";
+import { PMPlanner } from "@/features/maintenance/PMChecksheets";
+import { airJetForm, usePlans } from "@/features/maintenance/data";
 import SuperadminUserManagement from "./SuperadminUserManagement";
 import DispatchSection from "@/components/superadmin/DispatchSection";
 
@@ -55,8 +54,6 @@ const STATUS_BAR_COLOR: Record<string, string> = {
   waiting: "#f43f5e",
   doing: "#22d3ee",
   done: "#f97316",
-  qc1: "#8b5cf6",
-  qc2: "#d946ef",
   complete: "#10b981",
 };
 
@@ -72,7 +69,7 @@ const MONTHLY_TREND = [
 const BUDGET = 80000;
 
 // ─── Nav items grouped by category ──────────────────────────────────────────
-type NavKey = "overview" | "users" | "work-requests" | "work-orders-unified" | "dispatch" | "spare-parts" | "qc" | "approvals" | "settings" | "audit-log";
+type NavKey = "overview" | "users" | "work-requests" | "work-orders-unified" | "dispatch" | "spare-parts" | "pm" | "approvals" | "settings" | "audit-log";
 
 type NavSubItem = {
   key: NavKey;
@@ -115,7 +112,7 @@ const NAV_GROUPS: {
         ],
       },
       { key: "spare-parts",   label: "จัดการอะไหล่",       sublabel: "Spare Parts & Stock",   icon: <Package className="h-5 w-5" /> },
-      { key: "qc",            label: "ระบบ QC",            sublabel: "Quality Control",       icon: <ClipboardCheck className="h-5 w-5" /> },
+      { key: "pm",            label: "แผนบำรุงรักษา PM",            sublabel: "Preventive Maintenance",       icon: <ClipboardCheck className="h-5 w-5" /> },
     ],
   },
   {
@@ -208,10 +205,9 @@ function OverviewSection({ requests }: { requests: WorkRequest[] }) {
 
   const pendingPO = MOCK_PURCHASE_ORDERS.filter((p) => p.status === "pending").length;
   const pendingUserApproval = MOCK_USER_APPROVAL_REQUESTS.filter((a) => a.status === "pending").length;
-  const lowStock = MOCK_SPARE_PARTS_EXTENDED.filter((p) => p.stock < p.min_stock).length;
+  const lowStock = MOCK_SPARE_PARTS_EXTENDED.filter((p) => p.stock === 0 || isBelowMinimum(p)).length;
   const activeUsers = MOCK_SYSTEM_USERS.filter((u) => u.status === "active").length;
   const totalUsers = MOCK_SYSTEM_USERS.length;
-  const totalSpareValue = MOCK_SPARE_PARTS_EXTENDED.reduce((s, p) => s + p.stock * p.unit_price, 0);
 
   const categoryData = useMemo(() => {
     const map: Record<string, number> = {};
@@ -232,24 +228,15 @@ function OverviewSection({ requests }: { requests: WorkRequest[] }) {
   }, [requests]);
 
   const statusPipeline = useMemo(() => {
-    const ORDER = ["open", "assess", "waiting", "doing", "done", "qc1", "qc2", "complete"] as const;
+    const ORDER = ["open", "assess", "waiting", "doing", "done", "complete"] as const;
     return ORDER.map((s) => ({ key: s, label: STATUS_LABEL[s], count: requests.filter((r) => r.status === s).length }));
   }, [requests]);
   const maxPipeline = Math.max(...statusPipeline.map((s) => s.count), 1);
 
   const currentMonthCost = MONTHLY_TREND[MONTHLY_TREND.length - 1].cost;
 
-  // Checksheet
-  const csTemplates = MOCK_CHECKSHEET_TEMPLATES.filter((t) => t.active).length;
-  const csRecords = MOCK_CHECKSHEET_RECORDS;
-  const csFlagged = csRecords.filter((r) => r.status === "flagged").length;
-  const csCompliance = csRecords.length > 0
-    ? Math.round((csRecords.filter((r) => r.status === "complete").length / csRecords.length) * 100)
-    : 0;
-
-  // QC
-  const qcScheduled = MOCK_QC_SCHEDULES.filter((s) => s.status === "scheduled").length;
-  const qcMissed = MOCK_QC_SCHEDULES.filter((s) => s.status === "missed").length;
+  const [plans] = usePlans();
+  const pmScheduled = plans.filter((plan) => plan.date && plan.status !== "done").length;
 
   return (
     <div className="space-y-2.5">
@@ -258,14 +245,13 @@ function OverviewSection({ requests }: { requests: WorkRequest[] }) {
         <KpiCard icon={<BarChart3 className="h-3.5 w-3.5 text-primary" />} label="งานซ่อมทั้งหมด" value={total} sub={`วิกฤติ ${critical} · ค้าง ${overdue}`} accentClass="border-l-primary" pulse={critical > 0} />
         <KpiCard icon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />} label="อัตราเสร็จสิ้น" value={`${completionRate}%`} sub={`${complete}/${total} งาน`} accentClass="border-l-emerald-500" trend={5} />
         <KpiCard icon={<Users className="h-3.5 w-3.5 text-blue-500" />} label="ผู้ใช้งานระบบ" value={activeUsers} sub={`ทั้งหมด ${totalUsers} บัญชี`} accentClass="border-l-blue-500" />
-        <KpiCard icon={<Package className="h-3.5 w-3.5 text-amber-500" />} label="อะไหล่ต่ำ/หมด" value={lowStock} sub={`฿${(totalSpareValue / 1000).toFixed(0)}k`} accentClass="border-l-amber-500" pulse={lowStock > 0} />
+        <KpiCard icon={<Package className="h-3.5 w-3.5 text-amber-500" />} label="อะไหล่ต่ำ/หมด" value={lowStock} sub="คลังอะไหล่" accentClass="border-l-amber-500" pulse={lowStock > 0} />
 
-        {/* 4 Action Alert Cards */}
+        {/* Action alerts */}
         {[
           { label: "PO รออนุมัติ", value: pendingPO, icon: <ShoppingCart className="h-3.5 w-3.5" />, color: "bg-amber-50 text-amber-700 border-amber-200", pulse: pendingPO > 0 },
           { label: "User รออนุมัติ", value: pendingUserApproval, icon: <UserCheck className="h-3.5 w-3.5" />, color: "bg-blue-50 text-blue-700 border-blue-200", pulse: pendingUserApproval > 0 },
           { label: "งานค้างเกิน 24 ชม.", value: overdue, icon: <Clock className="h-3.5 w-3.5" />, color: "bg-orange-50 text-orange-700 border-orange-200", pulse: overdue > 0 },
-          { label: "QC พลาด/ยังไม่ตรวจ", value: qcMissed, icon: <AlertTriangle className="h-3.5 w-3.5" />, color: "bg-red-50 text-red-700 border-red-200", pulse: qcMissed > 0 },
         ].map((item) => (
           <Card key={item.label} className={cn("relative p-2.5 border flex items-center gap-2 transition-shadow hover:shadow-xs", item.color)}>
             <div className="h-7 w-7 rounded-md grid place-items-center bg-white/70 shrink-0">{item.icon}</div>
@@ -406,13 +392,12 @@ function OverviewSection({ requests }: { requests: WorkRequest[] }) {
             </div>
             <div className="p-1.5 rounded-md bg-muted/40">
               <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">เช็คชีท</p>
-              <p className="text-xs font-bold text-foreground leading-tight mt-0.5">{csTemplates} Tpl</p>
-              <p className="text-[9px] text-muted-foreground">{csCompliance}%</p>
+              <p className="text-xs font-bold text-foreground leading-tight mt-0.5">{airJetForm.number}</p>
+              <p className="text-[9px] text-muted-foreground">AIR JET FILTER</p>
             </div>
             <div className="p-1.5 rounded-md bg-muted/40">
-              <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">QC นัดหมาย</p>
-              <p className="text-xs font-bold text-foreground leading-tight mt-0.5">{qcScheduled}</p>
-              <p className="text-[9px] text-muted-foreground">พลาด {qcMissed}</p>
+              <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">PM ที่มีวันนัด</p>
+              <p className="text-xs font-bold text-foreground leading-tight mt-0.5">{pmScheduled}</p>
             </div>
           </div>
         </Card>
@@ -743,7 +728,7 @@ export default function SuperadminDashboard() {
               />
             )}
             {activeNav === "spare-parts" && <SparePartsSection />}
-            {activeNav === "qc" && <QCSection />}
+            {activeNav === "pm" && <div className="maintenance-workspace"><PMPlanner /></div>}
             {activeNav === "approvals" && <ApprovalsSection />}
             {activeNav === "settings" && <SettingsSection />}
             {activeNav === "audit-log" && <AuditLogSection />}

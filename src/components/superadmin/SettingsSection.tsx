@@ -148,7 +148,7 @@ export function SettingsSection() {
   const exportSparePartsCSV = () => {
     const headers = ["PartNo", "Name", "Category", "Stock", "MinStock", "UnitPrice", "Location", "Supplier"];
     const rows = MOCK_SPARE_PARTS_EXTENDED.map((p) => [
-      p.part_number,
+      p.part_id,
       `"${p.name}"`,
       p.category,
       p.stock,
@@ -285,7 +285,7 @@ export function SettingsSection() {
                               : "bg-blue-100 text-blue-700 border border-blue-200"
                           )}
                         >
-                          {m.critical_level.toUpperCase()}
+                          {m.critical_level === "unknown" ? "—" : m.critical_level.toUpperCase()}
                         </span>
                       </td>
 
@@ -302,7 +302,7 @@ export function SettingsSection() {
                               : "bg-gray-100 text-gray-700 border-gray-200"
                           )}
                         >
-                          {m.status === "operational" ? "ปกติ (Operational)" : m.status === "warning" ? "เตือน (Warning)" : m.status === "down" ? "หยุดทำงาน (Down)" : "ซ่อมบำรุง"}
+                          {m.status === "operational" ? "ปกติ (Operational)" : m.status === "warning" ? "เตือน (Warning)" : m.status === "down" ? "หยุดทำงาน (Down)" : m.status === "maintenance" ? "ซ่อมบำรุง" : "—"}
                         </span>
                       </td>
 
@@ -663,6 +663,7 @@ export function SettingsSection() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="unknown">ไม่ระบุ</SelectItem>
                       <SelectItem value="high">High (วิกฤติสูง)</SelectItem>
                       <SelectItem value="medium">Medium (ปานกลาง)</SelectItem>
                       <SelectItem value="low">Low (ทั่วไป)</SelectItem>
@@ -680,6 +681,7 @@ export function SettingsSection() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="unknown">ไม่ระบุ</SelectItem>
                       <SelectItem value="operational">ปกติ (Operational)</SelectItem>
                       <SelectItem value="warning">เตือน (Warning)</SelectItem>
                       <SelectItem value="down">หยุดทำงาน (Down)</SelectItem>

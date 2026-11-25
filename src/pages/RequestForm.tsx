@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { machines, matches } from "@/features/maintenance/data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -170,6 +171,8 @@ const RequestForm = () => {
   const [assetType, setAssetType] = useState("");
   const [machineNumber, setMachineNumber] = useState("");
   const [machineZone, setMachineZone] = useState("");
+  const [machineSearch, setMachineSearch] = useState("");
+  const [registeredMachineId, setRegisteredMachineId] = useState("");
   const [locationBuilding, setLocationBuilding] = useState("");
   const [locationFloor, setLocationFloor] = useState("");
   const [locationLine, setLocationLine] = useState("");
@@ -265,6 +268,8 @@ const RequestForm = () => {
   }, [myRequests]);
 
   const reset = () => {
+    setRegisteredMachineId("");
+    setMachineSearch("");
     setAssetId("");
     setAssetType("");
     setMachineNumber("");
@@ -293,6 +298,7 @@ const RequestForm = () => {
   };
 
   const resetForNewScan = () => {
+    setRegisteredMachineId("");
     setAssetId("");
     setAssetType("");
     setMachineNumber("");
@@ -400,10 +406,9 @@ const RequestForm = () => {
       !assetId.trim() ||
       !assetType.trim() ||
       !machineNumber.trim() ||
-      !machineZone.trim() ||
-      !locationBuilding.trim() ||
-      !locationFloor.trim() ||
-      !locationLine.trim()
+      (registeredMachineId
+        ? ![machineZone, locationBuilding, locationFloor, locationLine].some((value) => value.trim())
+        : ![machineZone, locationBuilding, locationFloor, locationLine].every((value) => value.trim()))
     ) {
       toast.error("กรุณากรอกข้อมูลเครื่องจักรให้ครบ (หรือสแกน QR)");
       return;
@@ -413,7 +418,7 @@ const RequestForm = () => {
       return;
     }
 
-    const location = `${locationBuilding} / ${locationFloor} / ${locationLine}`;
+    const location = [locationBuilding, locationFloor, locationLine].map((value) => value.trim()).filter(Boolean).join(" / ") || machineZone.trim();
     const details: RequestDetails = {
       asset_id: assetId.trim(),
       asset_type: assetType.trim(),
@@ -454,6 +459,19 @@ const RequestForm = () => {
     });
     reset();
   };
+
+  function selectRegisteredMachine(id: string) {
+    const machine = machines.find((item) => item.id === id);
+    if (!machine) return;
+    resetForNewScan();
+    setQrManualInput("");
+    setRegisteredMachineId(machine.id);
+    setAssetId(machine.code || machine.id);
+    setAssetType(machine.name);
+    setMachineNumber(machine.code || machine.id);
+    setMachineZone(machine.location);
+    setManualEntry(true);
+  }
 
   const applyScanResult = (qrValue: string) => {
     const selected = QR_ASSET_CATALOG.find((item) => item.qr_code === qrValue);
@@ -830,6 +848,22 @@ const RequestForm = () => {
                   <PencilLine className="h-4 w-4 mr-1" />
                   {manualEntry ? "ปิดกรอกเอง" : "กรอกเอง"}
                 </Button>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="machine-search" className="text-xs">ค้นหาในทะเบียนเครื่องจักร</Label>
+                <Input id="machine-search" type="search" value={machineSearch} onChange={(e) => setMachineSearch(e.target.value)} placeholder="รหัส ชื่อ หรือสถานที่" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="registered-machine" className="text-xs">เครื่องจักรจากทะเบียน</Label>
+                <select id="registered-machine" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={registeredMachineId} onChange={(e) => selectRegisteredMachine(e.target.value)}>
+                  <option value="" disabled>เลือกเครื่องจักร</option>
+                  {machines.filter((machine) => machine.id === registeredMachineId || matches(machineSearch, machine.code, machine.name, machine.location)).map((machine) => (
+                    <option key={machine.id} value={machine.id}>{[machine.code, machine.name, machine.location].filter(Boolean).join(" · ")}</option>
+                  ))}
+                </select>
               </div>
             </div>
 

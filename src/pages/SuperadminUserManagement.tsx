@@ -1,3 +1,4 @@
+import { StaffDirectory } from "@/features/maintenance/Registers";
 import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -40,13 +41,13 @@ const STATUS_CONFIG: Record<UserStatus, { label: string; cls: string; icon: Reac
 const ROLE_COLOR: Record<UserRole, string> = {
   superadmin: "bg-amber-100 text-amber-800 border-amber-200",
   technician: "bg-blue-100 text-blue-700 border-blue-200",
-  qc:         "bg-violet-100 text-violet-700 border-violet-200",
+  pm:         "bg-violet-100 text-violet-700 border-violet-200",
   admin:      "bg-orange-100 text-orange-700 border-orange-200",
   executive:  "bg-red-100 text-red-700 border-red-200",
   requester:  "bg-gray-100 text-gray-600 border-gray-200",
 };
 
-const ALL_ROLES: UserRole[] = ["superadmin", "admin", "executive", "qc", "technician", "requester"];
+const ALL_ROLES: UserRole[] = ["superadmin", "admin", "executive", "pm", "technician", "requester"];
 const ALL_STATUSES: UserStatus[] = ["active", "inactive", "suspended"];
 
 // ─── User Form Modal ──────────────────────────────────────────────────────────
@@ -425,6 +426,10 @@ export default function SuperadminUserManagement({ embedded = false }: Superadmi
       )}
 
       <div className={cn(embedded ? "space-y-4" : "max-w-7xl mx-auto p-6 space-y-6")}>
+        <details className="rounded-xl border bg-card p-4">
+          <summary className="cursor-pointer font-semibold">ทะเบียนบุคลากรจาก Excel</summary>
+          <div className="maintenance-workspace mt-4"><StaffDirectory /></div>
+        </details>
         {/* ── Stats ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[

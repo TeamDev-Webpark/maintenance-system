@@ -61,8 +61,6 @@ const STATUS_BADGE: Record<string, { bg: string; text: string; border: string }>
   waiting:  { bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200" },
   doing:    { bg: "bg-cyan-50",   text: "text-cyan-700",   border: "border-cyan-200" },
   done:     { bg: "bg-teal-50",   text: "text-teal-700",   border: "border-teal-200" },
-  qc1:      { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
-  qc2:      { bg: "bg-violet-50", text: "text-violet-700", border: "border-violet-200" },
   complete: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
 };
 

@@ -16,8 +16,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { matches } from "@/features/maintenance/data";
 import {
   MOCK_SPARE_PARTS_EXTENDED,
+  formatStockPrice,
+  isBelowMinimum,
+  stockValue,
+  type SparePartCategory,
   SparePartExtended,
 } from "@/lib/mockData";
 import { toast } from "sonner";
@@ -44,7 +49,7 @@ export function SparePartsSection() {
   const [formData, setFormData] = useState({
     name: "",
     part_number: "",
-    category: "bearing",
+    category: "bearing" as SparePartCategory,
     stock: 10,
     min_stock: 5,
     unit: "ชิ้น",
@@ -62,13 +67,10 @@ export function SparePartsSection() {
   // Filtered parts
   const filtered = useMemo(() => {
     return parts.filter((p) => {
-      const matchSearch =
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.part_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.location.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchSearch = matches(searchTerm, p.name, p.part_id, p.reference, p.group, p.location);
 
       const matchCategory = categoryFilter === "all" || p.category === categoryFilter;
-      const matchLowStock = !onlyLowStock || p.stock < p.min_stock;
+      const matchLowStock = !onlyLowStock || isBelowMinimum(p);
 
       return matchSearch && matchCategory && matchLowStock;
     });
@@ -77,8 +79,8 @@ export function SparePartsSection() {
   // Statistics
   const stats = useMemo(() => {
     const totalSKUs = parts.length;
-    const lowStockCount = parts.filter((p) => p.stock < p.min_stock).length;
-    const totalValuation = parts.reduce((sum, p) => sum + p.stock * p.unit_price, 0);
+    const lowStockCount = parts.filter((p) => isBelowMinimum(p)).length;
+    const totalValuation = stockValue(parts);
     const outOfStockCount = parts.filter((p) => p.stock === 0).length;
     return { totalSKUs, lowStockCount, totalValuation, outOfStockCount };
   }, [parts]);
@@ -95,14 +97,14 @@ export function SparePartsSection() {
     setAdjustNote("");
     setFormData({
       name: part.name,
-      part_number: part.part_number,
+      part_number: part.part_id,
       category: part.category,
       stock: part.stock,
       min_stock: part.min_stock,
       unit: part.unit,
       unit_price: part.unit_price,
       location: part.location,
-      supplier: part.supplier || "SKF Thailand",
+      supplier: part.supplier,
     });
   };
 
@@ -115,7 +117,7 @@ export function SparePartsSection() {
     setFormData({
       name: "",
       part_number: `SP-${String(parts.length + 1).padStart(3, "0")}`,
-      category: "bearing",
+      category: "bearing" as SparePartCategory,
       stock: 10,
       min_stock: 5,
       unit: "ชิ้น",
@@ -128,20 +130,25 @@ export function SparePartsSection() {
   // Handle Save Unified (Master Edit + Stock Adjustment)
   const handleSaveUnified = (e: React.FormEvent) => {
     e.preventDefault();
+    const code = formData.part_number.trim();
+    if (!code || parts.some((part) => part.part_id === code && (isAddMode || part.part_id !== unifiedModalPart?.part_id))) {
+      toast.error("กรุณาระบุรหัสอะไหล่ที่ไม่ซ้ำ");
+      return;
+    }
     if (isAddMode) {
       const newPart: SparePartExtended = {
-        id: `SP-${String(Date.now()).slice(-4)}`,
         name: formData.name,
-        part_number: formData.part_number,
+        part_id: code,
         category: formData.category,
         stock: Math.max(0, Number(formData.stock)),
-        min_stock: Number(formData.min_stock),
+        min_stock: formData.min_stock,
         unit: formData.unit,
-        unit_price: Number(formData.unit_price),
+        unit_price: formData.unit_price,
         location: formData.location,
         supplier: formData.supplier,
-        monthly_usage: 0,
-        pending_request_qty: 0,
+        max_stock: null,
+        last_updated: new Date().toISOString(),
+        compatible_assets: [],
       };
       setParts((prev) => [newPart, ...prev]);
       toast.success(`เพิ่มอะไหล่ใหม่ "${formData.name}" เข้าระบบเรียบร้อยแล้ว (สต็อกตั้งต้น: ${newPart.stock} ${newPart.unit})`);
@@ -158,16 +165,17 @@ export function SparePartsSection() {
 
       setParts((prev) =>
         prev.map((p) =>
-          p.id === unifiedModalPart.id
+          p.part_id === unifiedModalPart.part_id
             ? {
                 ...p,
                 name: formData.name,
-                part_number: formData.part_number,
+                part_id: code,
                 category: formData.category,
+                group: p.category === formData.category ? p.group : undefined,
                 stock: resultingStock,
-                min_stock: Number(formData.min_stock),
+                min_stock: formData.min_stock,
                 unit: formData.unit,
-                unit_price: Number(formData.unit_price),
+                unit_price: formData.unit_price,
                 location: formData.location,
                 supplier: formData.supplier,
               }
@@ -239,7 +247,7 @@ export function SparePartsSection() {
           <div className="min-w-0 pr-1">
             <p className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate">มูลค่าสต็อกรวม</p>
             <p className="text-base sm:text-2xl font-bold text-emerald-600 tabular-nums truncate">
-              ฿{stats.totalValuation.toLocaleString("th-TH")}
+              {formatStockPrice(stats.totalValuation)}
             </p>
           </div>
           <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-emerald-100 text-emerald-700 grid place-items-center shrink-0">
@@ -313,13 +321,13 @@ export function SparePartsSection() {
           </Card>
         ) : (
           filtered.map((part) => {
-            const isLow = part.stock < part.min_stock;
+            const isLow = isBelowMinimum(part);
             const isOut = part.stock === 0;
-            const totalPartVal = part.stock * part.unit_price;
+            const totalPartVal = part.unit_price === null ? null : part.stock * part.unit_price;
 
             return (
               <Card
-                key={part.id}
+                key={part.part_id}
                 className={cn(
                   "p-3.5 border transition-all space-y-3",
                   isOut ? "border-red-300 bg-red-50/20" : isLow ? "border-amber-300 bg-amber-50/20" : "hover:border-primary/40"
@@ -332,7 +340,7 @@ export function SparePartsSection() {
                       {part.name}
                     </div>
                     <div className="text-xs font-mono text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                      <span className="font-semibold text-foreground/80">{part.part_number}</span>
+                      <span className="font-semibold text-foreground/80">{part.part_id}</span>
                       {part.supplier && (
                         <>
                           <span className="text-muted-foreground/50">•</span>
@@ -367,7 +375,7 @@ export function SparePartsSection() {
                         {part.stock} {part.unit}
                       </span>
                       <span className="text-[10px] text-muted-foreground">
-                        (Min {part.min_stock})
+                        (Min {part.min_stock ?? "—"})
                       </span>
                     </div>
                   </div>
@@ -382,14 +390,14 @@ export function SparePartsSection() {
                   <div>
                     <p className="text-[10px] text-muted-foreground">ราคา/หน่วย</p>
                     <p className="font-medium text-xs text-foreground mt-0.5">
-                      ฿{part.unit_price.toLocaleString("th-TH")}
+                      {formatStockPrice(part.unit_price)}
                     </p>
                   </div>
 
                   <div>
                     <p className="text-[10px] text-muted-foreground">มูลค่ารวมในคลัง</p>
                     <p className="font-bold text-xs text-foreground mt-0.5">
-                      ฿{totalPartVal.toLocaleString("th-TH")}
+                      {formatStockPrice(totalPartVal)}
                     </p>
                   </div>
                 </div>
@@ -434,15 +442,15 @@ export function SparePartsSection() {
                 </tr>
               ) : (
                 filtered.map((part) => {
-                  const isLow = part.stock < part.min_stock;
-                  const totalPartVal = part.stock * part.unit_price;
+                  const isLow = isBelowMinimum(part);
+                  const totalPartVal = part.unit_price === null ? null : part.stock * part.unit_price;
 
                   return (
-                    <tr key={part.id} className={cn("hover:bg-muted/30 transition-colors", isLow && "bg-amber-500/5")}>
+                    <tr key={part.part_id} className={cn("hover:bg-muted/30 transition-colors", isLow && "bg-amber-500/5")}>
                       <td className="py-3 px-4">
                         <div className="font-semibold text-foreground">{part.name}</div>
                         <div className="text-xs font-mono text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                          <span>{part.part_number}</span>
+                          <span>{part.part_id}</span>
                           <span className="text-muted-foreground/60">•</span>
                           <span>{part.supplier || "Supplier N/A"}</span>
                         </div>
@@ -474,15 +482,15 @@ export function SparePartsSection() {
                       </td>
 
                       <td className="py-3 px-4 text-center text-xs tabular-nums text-muted-foreground">
-                        {part.min_stock} {part.unit}
+                        {part.min_stock ?? "—"} {part.unit}
                       </td>
 
                       <td className="py-3 px-4 text-right tabular-nums text-xs">
-                        ฿{part.unit_price.toLocaleString("th-TH")}
+                        {formatStockPrice(part.unit_price)}
                       </td>
 
                       <td className="py-3 px-4 text-right tabular-nums font-semibold text-xs text-foreground">
-                        ฿{totalPartVal.toLocaleString("th-TH")}
+                        {formatStockPrice(totalPartVal)}
                       </td>
 
                       <td className="py-3 px-4 text-right">
@@ -529,7 +537,7 @@ export function SparePartsSection() {
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {isAddMode
                     ? "กรอกรายละเอียดเพื่อลงทะเบียนอะไหล่ใหม่เข้าระบบ"
-                    : `${unifiedModalPart.name} (${unifiedModalPart.part_number})`}
+                    : `${unifiedModalPart.name} (${unifiedModalPart.part_id})`}
                 </p>
                 {!isAddMode && (
                   <div className="flex items-center gap-2 mt-1.5">
@@ -537,14 +545,14 @@ export function SparePartsSection() {
                       "px-2 py-0.5 rounded-full text-[11px] font-semibold border",
                       unifiedModalPart.stock === 0
                         ? "bg-red-50 text-red-700 border-red-200"
-                        : unifiedModalPart.stock < unifiedModalPart.min_stock
+                        : isBelowMinimum(unifiedModalPart)
                         ? "bg-amber-50 text-amber-700 border-amber-200"
                         : "bg-emerald-50 text-emerald-700 border-emerald-200"
                     )}>
                       สต็อกคงเหลือ: {unifiedModalPart.stock} {formData.unit}
                     </span>
                     <span className="text-[11px] text-muted-foreground">
-                      จุดเตือนต่ำ: {formData.min_stock} {formData.unit}
+                      จุดเตือนต่ำ: {formData.min_stock ?? "—"} {formData.unit}
                     </span>
                   </div>
                 )}
@@ -775,7 +783,7 @@ export function SparePartsSection() {
                       <Label htmlFor="part-category-select" className="text-xs">หมวดหมู่</Label>
                       <Select
                         value={formData.category}
-                        onValueChange={(val) => setFormData({ ...formData, category: val })}
+                        onValueChange={(val) => setFormData({ ...formData, category: val as SparePartCategory })}
                       >
                         <SelectTrigger id="part-category-select" className="w-full h-9 text-xs shadow-2xs">
                           <SelectValue placeholder="เลือกหมวดหมู่" />
@@ -807,8 +815,8 @@ export function SparePartsSection() {
                         id="part-price-input"
                         type="number"
                         min={0}
-                        value={formData.unit_price}
-                        onChange={(e) => setFormData({ ...formData, unit_price: Number(e.target.value) })}
+                        value={formData.unit_price ?? ""}
+                        onChange={(e) => setFormData({ ...formData, unit_price: e.target.value === "" ? null : Number(e.target.value) })}
                         className="h-9 text-xs"
                       />
                     </div>
@@ -834,8 +842,8 @@ export function SparePartsSection() {
                         id="part-min-stock-input"
                         type="number"
                         min={0}
-                        value={formData.min_stock}
-                        onChange={(e) => setFormData({ ...formData, min_stock: Number(e.target.value) })}
+                        value={formData.min_stock ?? ""}
+                        onChange={(e) => setFormData({ ...formData, min_stock: e.target.value === "" ? null : Number(e.target.value) })}
                         className="h-9 text-xs"
                       />
                     </div>

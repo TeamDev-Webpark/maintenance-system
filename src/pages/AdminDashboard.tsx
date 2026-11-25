@@ -4,7 +4,7 @@ import AdminSpareRequests from "./AdminSpareRequests.tsx";
 import TechnicianHistory from "./TechnicianHistory.tsx";
 import TechnicianDetail from "./TechnicianDetail.tsx";
 import TeamSection from "@/components/admin/TeamSection.tsx";
-import Checksheet from "./Checksheet.tsx";
+import { AirJet } from "@/features/maintenance/AirJet";
 import {
   BarChart,
   Bar,
@@ -60,9 +60,11 @@ import {
   timeAgo,
   WorkRequest,
   MOCK_SPARE_PARTS_EXTENDED,
+  formatStockPrice,
+  isBelowMinimum,
+  stockPercentage,
+  stockValue,
   MOCK_SPARE_PART_TRANSACTIONS,
-  MOCK_CHECKSHEET_TEMPLATES,
-  MOCK_CHECKSHEET_RECORDS,
   MOCK_SPARE_PART_REQUESTS,
   SPARE_PART_CATEGORY_LABEL,
 } from "@/lib/mockData";
@@ -82,8 +84,6 @@ const STATUS_BAR_COLOR: Record<string, string> = {
   waiting: "#f43f5e",
   doing: "#22d3ee",
   done: "#f97316",
-  qc1: "#8b5cf6",
-  qc2: "#d946ef",
   complete: "#10b981",
 };
 
@@ -298,8 +298,6 @@ function StatusPill({ status }: { status: WorkRequest["status"] }) {
     waiting: "bg-rose-100 text-rose-700",
     doing: "bg-cyan-100 text-cyan-700",
     done: "bg-orange-100 text-orange-700",
-    qc1: "bg-violet-100 text-violet-700",
-    qc2: "bg-fuchsia-100 text-fuchsia-700",
     complete: "bg-emerald-100 text-emerald-700",
   };
   return (
@@ -636,9 +634,8 @@ function SpareSection({
   const parts = MOCK_SPARE_PARTS_EXTENDED;
   const transactions = MOCK_SPARE_PART_TRANSACTIONS;
   const out = parts.filter((p) => p.stock === 0).length;
-  const low = parts.filter((p) => p.stock > 0 && p.stock < p.min_stock).length;
-  const ok = parts.filter((p) => p.stock >= p.min_stock).length;
-  const totalValue = parts.reduce((s, p) => s + p.stock * p.unit_price, 0);
+  const low = parts.filter((p) => p.stock > 0 && isBelowMinimum(p)).length;
+  const totalValue = stockValue(parts);
 
   const catUsage = Object.entries(
     transactions
@@ -651,7 +648,7 @@ function SpareSection({
       }, {} as Record<string, number>)
   ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 
-  const criticalParts = parts.filter((p) => p.stock < p.min_stock).slice(0, 5);
+  const criticalParts = parts.filter((p) => isBelowMinimum(p)).slice(0, 5);
 
   return (
     <div className="space-y-8">
@@ -663,7 +660,7 @@ function SpareSection({
             { label: "รายการทั้งหมด", value: parts.length, cls: "border-l-indigo-500" },
             { label: "หมดสต็อก", value: out, cls: "border-l-red-500" },
             { label: "ใกล้หมด", value: low, cls: "border-l-amber-500" },
-            { label: "มูลค่ารวม", value: `฿${totalValue.toLocaleString('th-TH')}`, cls: "border-l-emerald-500" },
+            { label: "มูลค่ารวม", value: formatStockPrice(totalValue), cls: "border-l-emerald-500" },
           ].map((k) => (
             <Card key={k.label} className={cn("p-4 border-l-4", k.cls)}>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{k.label}</p>
@@ -696,16 +693,16 @@ function SpareSection({
           ) : (
             <div className="space-y-3">
               {criticalParts.map((p) => {
-                const pct = Math.min(Math.round((p.stock / p.max_stock) * 100), 100);
+                const pct = stockPercentage(p);
                 const isOut = p.stock === 0;
                 return (
                   <div key={p.part_id} className="space-y-1">
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-medium truncate flex-1">{p.name}</span>
-                      <span className={cn("font-bold tabular-nums ml-2", isOut ? "text-red-600" : "text-amber-600")}>{p.stock}/{p.max_stock} {p.unit}</span>
+                      <span className={cn("font-bold tabular-nums ml-2", isOut ? "text-red-600" : "text-amber-600")}>{p.stock}/{p.max_stock ?? "—"} {p.unit}</span>
                     </div>
                     <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                      <div className={cn("h-full rounded-full", isOut ? "bg-red-400" : "bg-amber-400")} style={{ width: `${pct}%` }} />
+                      <div className={cn("h-full rounded-full", isOut ? "bg-red-400" : "bg-amber-400")} style={{ width: `${pct ?? 0}%` }} />
                     </div>
                   </div>
                 );
@@ -736,86 +733,7 @@ function SpareSection({
   );
 }
 
-// ─── Checksheet Summary Section ───────────────────────────────────────────────
-function ChecksheetSection({ navigate }: { navigate: (p: string) => void }) {
-  const templates = MOCK_CHECKSHEET_TEMPLATES.filter((t) => t.active);
-  const records = MOCK_CHECKSHEET_RECORDS;
-  const flagged = records.filter((r) => r.status === "flagged").length;
-  const completeRec = records.filter((r) => r.status === "complete").length;
-  const complianceRate = records.length > 0 ? Math.round((completeRec / records.length) * 100) : 0;
 
-  const perTemplate = templates.map((t) => {
-    const recs = records.filter((r) => r.template_id === t.template_id);
-    const ok = recs.filter((r) => r.status === "complete").length;
-    return { name: t.name.length > 18 ? t.name.slice(0, 18) + '…' : t.name, total: recs.length, ok, rate: recs.length > 0 ? Math.round((ok / recs.length) * 100) : 0 };
-  });
-
-  return (
-    <div className="space-y-8">
-      <section>
-        <SectionTitle icon={<ClipboardList className="h-4 w-4" />} title="สรุประบบเช็คชีท" />
-        <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
-          {[
-            { label: "Template ทั้งหมด", value: templates.length, cls: "border-l-indigo-500" },
-            { label: "บันทึกทั้งหมด", value: records.length, cls: "border-l-slate-400" },
-            { label: "พบปัญหา (Flag)", value: flagged, cls: "border-l-red-500" },
-            { label: "Compliance Rate", value: `${complianceRate}%`, cls: complianceRate >= 80 ? "border-l-emerald-500" : "border-l-amber-500" },
-          ].map((k) => (
-            <Card key={k.label} className={cn("p-4 border-l-4", k.cls)}>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{k.label}</p>
-              <p className="text-2xl font-bold tabular-nums">{k.value}</p>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-2">
-        <Card className="p-5">
-          <SectionTitle icon={<BarChart3 className="h-4 w-4" />} title="Compliance แต่ละ Template" />
-          <div className="space-y-3">
-            {perTemplate.map((t) => (
-              <div key={t.name} className="space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium flex-1">{t.name}</span>
-                  <span className={cn("font-bold tabular-nums ml-2", t.rate >= 80 ? "text-emerald-600" : "text-amber-600")}>{t.rate}% ({t.ok}/{t.total})</span>
-                </div>
-                <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
-                  <div className={cn("h-full rounded-full transition-all duration-700", t.rate >= 80 ? "bg-emerald-400" : "bg-amber-400")} style={{ width: `${t.rate}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <SectionTitle icon={<Activity className="h-4 w-4" />} title="บันทึกล่าสุด" />
-          <div className="space-y-2">
-            {records.slice(0, 5).map((rec) => (
-              <div key={rec.record_id} className="flex items-center gap-3 py-1.5 border-b last:border-0">
-                <div className={cn("h-2.5 w-2.5 rounded-full shrink-0", rec.status === "complete" ? "bg-emerald-400" : rec.status === "flagged" ? "bg-red-400" : "bg-amber-400")} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate">{rec.template_name}</p>
-                  <p className="text-[10px] text-muted-foreground">{rec.completed_by}</p>
-                </div>
-                <span className="text-[10px] text-muted-foreground">{timeAgo(rec.submitted_at)}</span>
-              </div>
-            ))}
-          </div>
-          <Button
-            variant="outline"
-            className="w-full mt-4 gap-1.5 h-11 sm:h-10 text-xs sm:text-sm font-semibold border border-slate-300 bg-white text-slate-900 hover:bg-slate-100 hover:text-black active:scale-[0.98] transition-all shadow-sm"
-            style={{ color: "#0f172a" }}
-            onClick={() => navigate('/admin/checksheet')}
-          >
-            <ClipboardList className="h-4 w-4 shrink-0" style={{ color: "#334155" }} />
-            <span className="font-semibold" style={{ color: "#0f172a" }}>ไปยังระบบเช็คชีท</span>
-            <ArrowRight className="h-3.5 w-3.5 shrink-0" style={{ color: "#334155" }} />
-          </Button>
-        </Card>
-      </section>
-    </div>
-  );
-}
 
 interface AdminDashboardProps {
   defaultTab?: NavKey;
@@ -915,7 +833,7 @@ export default function AdminDashboard({ defaultTab }: AdminDashboardProps = {})
   }, [requests]);
 
   const statusPipeline = useMemo(() => {
-    const ORDER = ["open", "assess", "waiting", "doing", "done", "qc1", "qc2", "complete"] as const;
+    const ORDER = ["open", "assess", "waiting", "doing", "done", "complete"] as const;
     return ORDER.map((s) => ({ key: s, label: STATUS_LABEL[s], count: requests.filter((r) => r.status === s).length }));
   }, [requests]);
 
@@ -1162,10 +1080,7 @@ export default function AdminDashboard({ defaultTab }: AdminDashboardProps = {})
 
           <div className="p-3.5 sm:p-5 lg:p-6 animate-slide-up">
             {isChecksheetSystem ? (
-              <Checksheet
-                embedded
-                onBack={handleChecksheetBack}
-              />
+              <div className="maintenance-workspace"><AirJet /></div>
             ) : isTechDetail && techId ? (
               <TechnicianDetail
                 embedded
@@ -1188,7 +1103,7 @@ export default function AdminDashboard({ defaultTab }: AdminDashboardProps = {})
                   />
                 )}
                 {activeNav === "spare" && <SpareSection navigate={navigate} onNavigateNav={handleNavSelect} />}
-                {activeNav === "checksheet" && <ChecksheetSection navigate={navigate} />}
+                {activeNav === "checksheet" && <div className="maintenance-workspace"><AirJet /></div>}
                 {activeNav === "spare-requests" && <AdminSpareRequests embedded />}
                 {activeNav === "technician-history" && <TechnicianHistory embedded />}
               </>

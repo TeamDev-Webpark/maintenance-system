@@ -7,8 +7,6 @@ const STYLES: Record<Status, string> = {
   waiting: "bg-rose-500/10 text-rose-700 border-rose-500/30",
   doing: "bg-cyan-500/10 text-cyan-700 border-cyan-500/30",
   done: "bg-orange-500/10 text-orange-700 border-orange-500/30",
-  qc1: "bg-violet-500/10 text-violet-700 border-violet-500/30",
-  qc2: "bg-fuchsia-500/10 text-fuchsia-700 border-fuchsia-500/30",
   complete: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
 };
 
@@ -18,8 +16,6 @@ const DOT_STYLES: Record<Status, string> = {
   waiting: "bg-rose-500",
   doing: "bg-cyan-500",
   done: "bg-orange-500",
-  qc1: "bg-violet-500",
-  qc2: "bg-fuchsia-500",
   complete: "bg-emerald-500",
 };
 

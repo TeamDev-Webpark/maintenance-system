@@ -52,8 +52,6 @@ const STATUS_DOT: Record<WorkRequest["status"], string> = {
   waiting: "bg-rose-400",
   doing: "bg-cyan-400",
   done: "bg-orange-400",
-  qc1: "bg-violet-400",
-  qc2: "bg-fuchsia-400",
   complete: "bg-emerald-500",
 };
 
@@ -81,14 +79,6 @@ const STATUS_BADGE_CONFIG: Record<WorkRequest["status"], { label: string; classN
   done: {
     label: "ซ่อมเสร็จ",
     className: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800",
-  },
-  qc1: {
-    label: "รอ QC 1",
-    className: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800",
-  },
-  qc2: {
-    label: "รอ QC 2",
-    className: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-950/40 dark:text-fuchsia-300 dark:border-fuchsia-800",
   },
 };
 

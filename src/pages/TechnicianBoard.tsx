@@ -27,8 +27,6 @@ const STATUS_COLUMNS: { key: Status; title: string; accent: string }[] = [
   { key: "waiting", title: "รออะไหล่", accent: "border-rose-500" },
   { key: "doing", title: "กำลังซ่อม", accent: "border-cyan-500" },
   { key: "done", title: "ปิดงาน", accent: "border-orange-500" },
-  { key: "qc1", title: "รอตรวจครั้งที่ 1", accent: "border-violet-500" },
-  { key: "qc2", title: "รอตรวจครั้งที่ 2", accent: "border-fuchsia-500" },
   { key: "complete", title: "เสร็จสิ้น", accent: "border-emerald-500" },
 ];
 
@@ -38,8 +36,6 @@ const SUB_STATUS_BY_STATUS: Record<Status, SubStatus> = {
   waiting: "waiting-parts",
   doing: "in-progress",
   done: "closed",
-  qc1: "qc-round1",
-  qc2: "qc-round2",
   complete: "finished",
 };
 

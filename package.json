@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:president": "vite --config vite.president.config.ts",
+    "build:president": "vite build --config vite.president.config.ts",
     "dev:https": "vite --https",
     "dev:https:lan": "vite --host --https",
     "build": "vite build",

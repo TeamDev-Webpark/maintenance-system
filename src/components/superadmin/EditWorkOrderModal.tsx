@@ -91,9 +91,7 @@ const STATUS_OPTIONS: { value: Status; label: string; desc: string; color: strin
   { value: "waiting", label: "รออะไหล่", desc: "รอจัดซื้อหรือเบิกพาร์ท", color: "border-amber-500", badgeCls: "bg-amber-50 text-amber-700 border-amber-200" },
   { value: "doing", label: "กำลังซ่อม", desc: "ช่างกำลังเข้าปฏิบัติงาน", color: "border-cyan-500", badgeCls: "bg-cyan-50 text-cyan-700 border-cyan-200" },
   { value: "done", label: "ปิดงาน", desc: "ช่างทำงานเสร็จ รอตรวจสอบ", color: "border-teal-500", badgeCls: "bg-teal-50 text-teal-700 border-teal-200" },
-  { value: "qc1", label: "รอตรวจ QC 1", desc: "ตรวจสอบคุณภาพรอบที่ 1", color: "border-purple-500", badgeCls: "bg-purple-50 text-purple-700 border-purple-200" },
-  { value: "qc2", label: "รอตรวจ QC 2", desc: "ตรวจสอบคุณภาพรอบที่ 2", color: "border-violet-500", badgeCls: "bg-violet-50 text-violet-700 border-violet-200" },
-  { value: "complete", label: "เสร็จสิ้น", desc: "ผ่าน QC และปิดงานสมบูรณ์", color: "border-emerald-500", badgeCls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  { value: "complete", label: "เสร็จสิ้น", desc: "ปิดงานสมบูรณ์", color: "border-emerald-500", badgeCls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
 ];
 
 const PRIORITY_OPTIONS: { value: Priority; label: string; dot: string; badgeCls: string }[] = [

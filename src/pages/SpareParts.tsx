@@ -32,8 +32,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { matches } from "@/features/maintenance/data";
 import {
   MOCK_SPARE_PARTS_EXTENDED,
+  formatStockPrice,
+  isBelowMinimum,
+  stockPercentage,
+  stockValue,
   MOCK_SPARE_PART_TRANSACTIONS,
   SPARE_PART_CATEGORY_LABEL,
   SparePartExtended,
@@ -44,16 +49,8 @@ import {
 
 function getStockStatus(part: SparePartExtended): "out" | "low" | "ok" {
   if (part.stock === 0) return "out";
-  if (part.stock < part.min_stock) return "low";
+  if (isBelowMinimum(part)) return "low";
   return "ok";
-}
-
-function stockPct(part: SparePartExtended): number {
-  return Math.min(Math.round((part.stock / part.max_stock) * 100), 100);
-}
-
-function formatPrice(n: number) {
-  return n.toLocaleString("th-TH");
 }
 
 function StockBadge({ status }: { status: "out" | "low" | "ok" }) {
@@ -687,15 +684,15 @@ export default function SpareParts({ embedded = false, onBack }: SparePartsProps
   const kpi = useMemo(() => {
     const total = parts.length;
     const out = parts.filter((p) => p.stock === 0).length;
-    const low = parts.filter((p) => p.stock > 0 && p.stock < p.min_stock).length;
-    const totalValue = parts.reduce((sum, p) => sum + p.stock * p.unit_price, 0);
-    const needOrder = parts.filter((p) => p.stock < p.min_stock).length;
+    const low = parts.filter((p) => p.stock > 0 && isBelowMinimum(p)).length;
+    const totalValue = stockValue(parts);
+    const needOrder = parts.filter((p) => isBelowMinimum(p)).length;
     return { total, out, low, totalValue, needOrder };
   }, [parts]);
 
   const filtered = useMemo(() => {
     return parts.filter((p) => {
-      const matchSearch = search === "" || p.name.toLowerCase().includes(search.toLowerCase()) || p.part_id.toLowerCase().includes(search.toLowerCase());
+      const matchSearch = matches(search, p.name, p.part_id, p.reference, p.group, p.location);
       const matchCat = catFilter === "all" || p.category === catFilter;
       const s = getStockStatus(p);
       const matchStatus = statusFilter === "all" || s === statusFilter;
@@ -770,7 +767,7 @@ export default function SpareParts({ embedded = false, onBack }: SparePartsProps
             { label: "ต้องสั่งซื้อ", value: kpi.needOrder, icon: <ShieldAlert className="h-4 w-4" />, accent: "#f59e0b", border: "border-l-amber-500" },
             { label: "หมดสต็อก", value: kpi.out, icon: <AlertTriangle className="h-4 w-4 text-red-500" />, accent: "#ef4444", border: "border-l-red-500" },
             { label: "ใกล้หมด", value: kpi.low, icon: <TrendingDown className="h-4 w-4 text-amber-500" />, accent: "#f59e0b", border: "border-l-amber-400" },
-            { label: "มูลค่ารวม", value: `฿${formatPrice(kpi.totalValue)}`, icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />, accent: "#10b981", border: "border-l-emerald-500" },
+            { label: "มูลค่ารวม", value: formatStockPrice(kpi.totalValue), icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />, accent: "#10b981", border: "border-l-emerald-500" },
           ].map((k) => (
             <Card key={k.label} className={cn("p-4 border-l-4 hover:shadow-md transition-shadow", k.border)}>
               <div className="flex items-start justify-between gap-2">
@@ -865,7 +862,7 @@ export default function SpareParts({ embedded = false, onBack }: SparePartsProps
               ) : (
                 filtered.map((p) => {
                   const s = getStockStatus(p);
-                  const pct = stockPct(p);
+                  const pct = stockPercentage(p);
                   const barColor = s === "out" ? "bg-red-500" : s === "low" ? "bg-amber-500" : "bg-emerald-500";
                   return (
                     <Card
@@ -882,7 +879,7 @@ export default function SpareParts({ embedded = false, onBack }: SparePartsProps
                             {p.part_id}
                           </span>
                           <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground border">
-                            {SPARE_PART_CATEGORY_LABEL[p.category]}
+                            {p.group || SPARE_PART_CATEGORY_LABEL[p.category]}
                           </span>
                         </div>
                         <StockBadge status={s} />
@@ -909,15 +906,15 @@ export default function SpareParts({ embedded = false, onBack }: SparePartsProps
                           <div className="flex items-baseline gap-1.5">
                             <span className="font-bold text-xl tabular-nums text-foreground">{p.stock}</span>
                             <span className="text-xs font-medium text-muted-foreground">{p.unit}</span>
-                            <span className="text-xs text-muted-foreground/80">/ {p.max_stock} {p.unit}</span>
+                            <span className="text-xs text-muted-foreground/80">/ {p.max_stock ?? "—"} {p.unit}</span>
                           </div>
                         </div>
                         <div className="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                          <div className={cn("h-full rounded-full transition-all duration-500", barColor)} style={{ width: `${pct}%` }} />
+                          <div className={cn("h-full rounded-full transition-all duration-500", barColor)} style={{ width: `${pct ?? 0}%` }} />
                         </div>
                         <div className="flex justify-between items-center text-[11px] text-muted-foreground">
-                          <span>จุดสั่งซื้อต่ำสุด (Min): <strong>{p.min_stock} {p.unit}</strong></span>
-                          <span className="font-semibold text-foreground/90">{pct}%</span>
+                          <span>จุดสั่งซื้อต่ำสุด (Min): <strong>{p.min_stock ?? "—"} {p.unit}</strong></span>
+                          <span className="font-semibold text-foreground/90">{pct === null ? "—" : `${pct}%`}</span>
                         </div>
                       </div>
 
@@ -925,7 +922,7 @@ export default function SpareParts({ embedded = false, onBack }: SparePartsProps
                       <div className="flex items-center justify-between gap-3 pt-1 border-t border-border/40">
                         <div className="text-xs">
                           <span className="text-muted-foreground">ราคา: </span>
-                          <span className="font-mono font-bold text-sm text-foreground">฿{formatPrice(p.unit_price)}</span>
+                          <span className="font-mono font-bold text-sm text-foreground">{formatStockPrice(p.unit_price)}</span>
                           <span className="text-muted-foreground text-[11px]"> /{p.unit}</span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -980,7 +977,7 @@ export default function SpareParts({ embedded = false, onBack }: SparePartsProps
                     ) : (
                       filtered.map((p, i) => {
                         const s = getStockStatus(p);
-                        const pct = stockPct(p);
+                        const pct = stockPercentage(p);
                         const barColor = s === "out" ? "bg-red-400" : s === "low" ? "bg-amber-400" : "bg-emerald-400";
                         return (
                           <tr key={p.part_id} className={cn("border-b last:border-0 transition-colors hover:bg-muted/30", i % 2 !== 0 && "bg-muted/10")}>
@@ -990,24 +987,24 @@ export default function SpareParts({ embedded = false, onBack }: SparePartsProps
                               <p className="text-xs text-muted-foreground">{p.supplier}</p>
                             </td>
                             <td className="px-4 py-3">
-                              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">{SPARE_PART_CATEGORY_LABEL[p.category]}</span>
+                              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">{p.group || SPARE_PART_CATEGORY_LABEL[p.category]}</span>
                             </td>
                             <td className="px-4 py-3 min-w-[150px]">
                               <div className="flex items-baseline gap-1.5 mb-1.5">
                                 <span className="font-bold text-base tabular-nums">{p.stock}</span>
                                 <span className="text-xs text-muted-foreground">{p.unit}</span>
-                                <span className="text-xs text-muted-foreground ml-auto">/ {p.max_stock}</span>
+                                <span className="text-xs text-muted-foreground ml-auto">/ {p.max_stock ?? "—"}</span>
                               </div>
                               <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                                <div className={cn("h-full rounded-full transition-all duration-700", barColor)} style={{ width: `${pct}%` }} />
+                                <div className={cn("h-full rounded-full transition-all duration-700", barColor)} style={{ width: `${pct ?? 0}%` }} />
                               </div>
                               <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
-                                <span>Min: {p.min_stock}</span>
-                                <span>{pct}%</span>
+                                <span>Min: {p.min_stock ?? "—"}</span>
+                                <span>{pct === null ? "—" : `${pct}%`}</span>
                               </div>
                             </td>
                             <td className="px-4 py-3 hidden md:table-cell text-muted-foreground text-xs">{p.location}</td>
-                            <td className="px-4 py-3 hidden lg:table-cell text-xs font-mono">฿{formatPrice(p.unit_price)}</td>
+                            <td className="px-4 py-3 hidden lg:table-cell text-xs font-mono">{formatStockPrice(p.unit_price)}</td>
                             <td className="px-4 py-3"><StockBadge status={s} /></td>
                             <td className="px-4 py-3 text-right">
                               <div className="flex items-center justify-end gap-1.5">

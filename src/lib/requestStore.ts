@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from "react";
+import { toast } from "sonner";
+import { INSPECTION_KEY, inspectionWorkRequest, readInspections } from "../features/maintenance/inspectionData";
 import {
   MOCK_REQUESTS_WITH_TIMELINE,
   Priority,
@@ -25,8 +27,6 @@ const STATUS_CHANGE_LABEL: Record<Status, string> = {
   doing: "กำลังซ่อม",
   waiting: "รออะไหล่",
   done: "ปิดงานแล้ว",
-  qc1: "รอตรวจครั้งที่ 1",
-  qc2: "รอตรวจครั้งที่ 2",
   complete: "เสร็จสิ้น",
 };
 
@@ -36,8 +36,6 @@ const DEFAULT_SUB_STATUS_BY_STATUS: Record<Status, SubStatus> = {
   doing: "in-progress",
   waiting: "waiting-parts",
   done: "closed",
-  qc1: "qc-round1",
-  qc2: "qc-round2",
   complete: "finished",
 };
 
@@ -66,12 +64,52 @@ function normalizeRequest(request: WorkRequest): WorkRequest {
 }
 
 state = MOCK_REQUESTS_WITH_TIMELINE.map(normalizeRequest);
+const PM_REPAIRS_KEY = "fixflow:pm-repair-updates";
+
+function readPMRepairUpdates(): Record<string, WorkRequest> {
+  try {
+    return JSON.parse(localStorage.getItem(PM_REPAIRS_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+function savePMRepairUpdate(id: string) {
+  if (!id.startsWith("REQ-PM-")) return;
+  const request = state.find((item) => item.request_id === id);
+  if (!request) return;
+  try {
+    const saved = readPMRepairUpdates();
+    localStorage.setItem(PM_REPAIRS_KEY, JSON.stringify({ ...saved, [id]: request }));
+  } catch {
+    toast.error("บันทึกสถานะใบแจ้งซ่อม PM ลงเบราว์เซอร์ไม่สำเร็จ");
+  }
+}
+
+function syncPMChecksheets() {
+  const saved = readPMRepairUpdates();
+  const previous = new Map(state.filter((item) => item.request_id.startsWith("REQ-PM-")).map((item) => [item.request_id, item]));
+  const repairs = readInspections().records.flatMap((record) => {
+    const repair = inspectionWorkRequest(record);
+    return repair ? [saved[repair.request_id] ?? previous.get(repair.request_id) ?? repair] : [];
+  });
+  state = [...repairs, ...state.filter((item) => !item.request_id.startsWith("REQ-PM-"))];
+  emit();
+}
 
 function emit() {
   listeners.forEach((l) => l());
 }
 
+syncPMChecksheets();
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key === INSPECTION_KEY || event.key === PM_REPAIRS_KEY || event.key === null) syncPMChecksheets();
+  });
+}
+
 export const requestStore = {
+  syncPMChecksheets,
   getAll(): WorkRequest[] {
     return state;
   },
@@ -111,6 +149,7 @@ export const requestStore = {
   },
   update(id: string, patch: Partial<WorkRequest>) {
     state = state.map((r) => (r.request_id === id ? { ...r, ...patch } : r));
+    savePMRepairUpdate(id);
     emit();
   },
   setAssessmentReport(id: string, assessmentReport: AssessmentReport) {
@@ -169,6 +208,7 @@ export const requestStore = {
         requester_notifications: notifications,
       };
     });
+    savePMRepairUpdate(id);
     emit();
   },
   markRequesterNotificationsRead(requestId: string, notificationIds: string[]) {
@@ -184,6 +224,7 @@ export const requestStore = {
         ),
       };
     });
+    savePMRepairUpdate(requestId);
     emit();
   },
 };

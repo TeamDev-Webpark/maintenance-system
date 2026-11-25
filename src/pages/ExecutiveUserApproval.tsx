@@ -35,7 +35,8 @@ const STATUS_CONFIG: Record<ApprovalStatus, { label: string; cls: string; icon: 
 
 const ROLE_COLOR: Record<UserRole, string> = {
   technician: "bg-blue-100 text-blue-700",
-  qc:         "bg-violet-100 text-violet-700",
+  superadmin: "bg-amber-100 text-amber-700",
+  pm:         "bg-violet-100 text-violet-700",
   admin:      "bg-orange-100 text-orange-700",
   executive:  "bg-red-100 text-red-700",
   requester:  "bg-gray-100 text-gray-600",

@@ -1,3 +1,4 @@
+import { usePlans } from "@/features/maintenance/data";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -17,7 +18,6 @@ import {
   MOCK_SPARE_PARTS_EXTENDED,
   MOCK_PURCHASE_ORDERS,
   MOCK_SPARE_PART_REQUESTS,
-  MOCK_QC_SCHEDULES,
   MOCK_USER_APPROVAL_REQUESTS,
   CATEGORY_LABEL,
   WorkRequest,
@@ -159,6 +159,7 @@ function ChartTip({ active, payload, label }: { active?: boolean; payload?: { va
 export default function ExecutiveDashboard() {
   const navigate = useNavigate();
   const requests = useRequests();
+  const [plans] = usePlans();
 
   const kpi = useMemo(() => {
     const total = requests.length;
@@ -171,10 +172,9 @@ export default function ExecutiveDashboard() {
     const currentMonthCost = MONTHLY_TREND[MONTHLY_TREND.length - 1].cost;
     const budgetUsed = Math.round((currentMonthCost / BUDGET) * 100);
     const spareOutOfStock = MOCK_SPARE_PARTS_EXTENDED.filter((p) => p.stock === 0).length;
-    const qcCompliance = MOCK_QC_SCHEDULES.length > 0
-      ? Math.round((MOCK_QC_SCHEDULES.filter((s) => s.status === "done").length / MOCK_QC_SCHEDULES.length) * 100) : 0;
-    return { total, critical, complete, overdue, completionRate, pendingPO, pendingApproval, currentMonthCost, budgetUsed, spareOutOfStock, qcCompliance };
-  }, [requests]);
+    const pmCompleted = plans.filter((plan) => plan.status === "done").length;
+    return { total, critical, complete, overdue, completionRate, pendingPO, pendingApproval, currentMonthCost, budgetUsed, spareOutOfStock, pmCompleted };
+  }, [requests, plans]);
 
   const categoryBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
@@ -186,7 +186,7 @@ export default function ExecutiveDashboard() {
 
   // Top spare parts by cost
   const topSpares = useMemo(() =>
-    [...MOCK_SPARE_PARTS_EXTENDED]
+    MOCK_SPARE_PARTS_EXTENDED.filter((part) => part.unit_price !== null)
       .sort((a, b) => (b.stock * b.unit_price) - (a.stock * a.unit_price))
       .slice(0, 5)
       .map((p) => ({ name: p.name.length > 20 ? p.name.slice(0, 20) + "…" : p.name, value: p.stock * p.unit_price })),
@@ -378,6 +378,7 @@ export default function ExecutiveDashboard() {
               <h3 className="font-semibold text-sm">อะไหล่มูลค่าสูงสุด Top 5</h3>
             </div>
             <div className="space-y-3">
+              {topSpares.length === 0 && <p className="text-xs text-muted-foreground">ยังไม่มีข้อมูลราคาอะไหล่</p>}
               {topSpares.map((s, i) => (
                 <div key={s.name} className="flex items-center gap-2 text-xs">
                   <span className="w-4 shrink-0 font-bold text-muted-foreground">{i + 1}</span>
@@ -404,7 +405,7 @@ export default function ExecutiveDashboard() {
                 { label: "อะไหล่หมดสต็อก", value: kpi.spareOutOfStock, dot: "bg-orange-500", bad: kpi.spareOutOfStock > 0 },
                 { label: "PO รออนุมัติ", value: kpi.pendingPO, dot: "bg-amber-500", bad: kpi.pendingPO > 0 },
                 { label: "สิทธิ์รออนุมัติ", value: kpi.pendingApproval, dot: "bg-blue-500", bad: false },
-                { label: "QC Compliance", value: `${kpi.qcCompliance}%`, dot: kpi.qcCompliance >= 80 ? "bg-emerald-500" : "bg-amber-500", bad: kpi.qcCompliance < 80 },
+                { label: "งาน PM เสร็จสิ้น", value: kpi.pmCompleted.toLocaleString("th-TH"), dot: "bg-emerald-500", bad: false },
               ].map((item) => (
                 <div key={item.label} className={cn("flex items-center justify-between rounded-lg px-3 py-2", item.bad ? "bg-red-50" : "bg-muted/40")}>
                   <div className="flex items-center gap-2 text-xs">

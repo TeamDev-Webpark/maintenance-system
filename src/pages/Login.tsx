@@ -9,8 +9,9 @@ import {
   BarChart3, ClipboardCheck, TrendingUp, Crown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { type UserRole } from "@/lib/mockData";
 
-type Role = "technician" | "requester" | "admin" | "qc" | "executive" | "superadmin";
+type Role = UserRole;
 
 const ROLE_CONFIG: Record<
   Role,
@@ -19,7 +20,7 @@ const ROLE_CONFIG: Record<
   technician: { username: "somsak.t",  password: "demo1234", emp_id: "TECH001",  name: "สมศักดิ์ ช่างไฟ",         department: "Maintenance",       navTarget: "/board",               label: "ช่างซ่อมบำรุง" },
   requester:  { username: "nophon.r",  password: "demo1234", emp_id: "REQ042",   name: "นภดล ฝ่ายผลิต",          department: "ฝ่ายผลิต",          navTarget: "/request",             label: "ผู้แจ้งซ่อม" },
   admin:      { username: "admin",     password: "demo1234", emp_id: "ADMIN001", name: "ผู้จัดการฝ่ายซ่อมบำรุง", department: "Management",        navTarget: "/admin/dashboard",     label: "ผู้ดูแลระบบ" },
-  qc:         { username: "qc",        password: "demo1234", emp_id: "QC001",    name: "ณัฐพงศ์ QC",             department: "ฝ่ายควบคุมคุณภาพ", navTarget: "/qc/dashboard",        label: "เจ้าหน้าที่ QC" },
+  pm:         { username: "pm",        password: "demo1234", emp_id: "PM001",    name: "ผู้วางแผน PM",            department: "ฝ่ายซ่อมบำรุง",     navTarget: "/pm/dashboard",        label: "ผู้วางแผน PM" },
   executive:  { username: "executive", password: "demo1234", emp_id: "EXEC001",  name: "ผู้บริหาร",              department: "Executive",         navTarget: "/executive/dashboard", label: "ผู้บริหาร" },
   superadmin: { username: "superadmin", password: "demo1234", emp_id: "SA001",   name: "System Superadmin",        department: "IT",                navTarget: "/superadmin/dashboard", label: "Superadmin" },
 };
@@ -28,7 +29,7 @@ const ROLE_CARDS: { role: Role; icon: React.ReactNode; title: string; subtitle: 
   { role: "technician", icon: <Wrench className="h-6 w-6" />,         title: "ช่างซ่อมบำรุง",  subtitle: "Technician", color: "text-blue-600 bg-blue-50" },
   { role: "requester",  icon: <ClipboardList className="h-6 w-6" />,  title: "ผู้แจ้งซ่อม",    subtitle: "Requester",  color: "text-gray-600 bg-gray-50" },
   { role: "admin",      icon: <BarChart3 className="h-6 w-6" />,      title: "ผู้ดูแลระบบ",    subtitle: "Admin",      color: "text-orange-600 bg-orange-50" },
-  { role: "qc",         icon: <ClipboardCheck className="h-6 w-6" />, title: "เจ้าหน้าที่ QC", subtitle: "QC Officer", color: "text-violet-600 bg-violet-50" },
+  { role: "pm",         icon: <ClipboardCheck className="h-6 w-6" />, title: "ผู้วางแผน PM", subtitle: "PM Planner", color: "text-violet-600 bg-violet-50" },
   { role: "executive",  icon: <TrendingUp className="h-6 w-6" />,     title: "ผู้บริหาร",      subtitle: "Executive",  color: "text-emerald-600 bg-emerald-50" },
   { role: "superadmin", icon: <Crown className="h-6 w-6" />,          title: "Superadmin",   subtitle: "Full Access", color: "text-amber-600 bg-amber-50" },
 ];
@@ -47,11 +48,15 @@ const Login = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !password) {
+    const cfg = ROLE_CONFIG[role];
+    if (!username.trim() || !password) {
       toast.error("กรุณากรอกชื่อผู้ใช้และรหัสผ่าน");
       return;
     }
-    const cfg = ROLE_CONFIG[role];
+    if ((username.trim() !== cfg.username && username.trim() !== cfg.emp_id) || password !== cfg.password) {
+      toast.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ตรงกับบัญชีเดโมของบทบาทที่เลือก");
+      return;
+    }
     sessionStorage.setItem(
       "fixflow_user",
       JSON.stringify({
